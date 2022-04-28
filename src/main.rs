@@ -1,49 +1,74 @@
-use actix_web::{web, HttpServer, HttpResponse, App};
-use serde::Deserialize;
-mod gcd;
+use num::Complex;
+use std::str::FromStr;
 
 fn main() {
-    let server = HttpServer::new(|| {
-        App::new().route("/", web::get().to(get_index))
-        .route("/gcd", web::post().to(post_gcd))
-    });
-
-    println!("Serving on http://localhost:3000");
-    server.bind("127.0.0.1:3000").expect("Problem binding server address")
-    .run().expect("error running server");
+    
 }
 
-fn get_index() -> HttpResponse {
-    HttpResponse::Ok().content_type("text/html")
-    .body(
-        r#"
-        <title>GCD Calculator</title>
-        <form action="/gcd" method="post">
-        <input type="text" name="n"/>
-        <input type="text" name="m"/>
-        <button type="submit">Compute GCD</button>
-        </form>
-        "#,
-    )
-}
-
-fn post_gcd(form: web::Form<GCDRequest>) -> HttpResponse {
-    if form.n == 0 || form.m == 0 {
-        return HttpResponse::BadRequest()
-        .content_type("text/html")
-        .body("Computing GCD with zero is boring!");
+fn complex_square_add_loop(c: Complex<f64>, limit: usize) -> Option<usize> {
+    let mut z = Complex { re: 0.0, im: 0.0 };
+    for i in 0..limit {
+        if z.norm_sqr() > 4.0 {
+            return Some(i);
+        }
+        z = z * z + c;
     }
-
-    let response = format!("The greatest common divisor of the numbers {} and {} \
-    is <b>{}</b>\n", form.n, form.m, gcd::gcd(form.n, form.m));
-
-    HttpResponse::Ok()
-    .content_type("text/html")
-    .body(response)
+    None
 }
 
-#[derive(Deserialize)]
-struct GCDRequest {
-    n: u64,
-    m: u64,
+fn parse_complex(s: &str) -> Option<Complex<f64>> {
+    match parse_pair(s, ',') {
+        Some((re, im)) => Some(Complex { re, im}),
+        None => None
+    }
+}
+
+#[test]
+fn test_parse_complex() {
+    assert_eq!(parse_complex("1.25,-0.0625"), Some(Complex{ re: 1.25, im: -0.0625 }));
+    assert_eq!(parse_complex(",-0.0625"), None);
+    assert_eq!(parse_complex("1.25,"), None)
+}
+
+fn parse_pair<T: FromStr>(s: &str, sep: char) -> Option<(T, T)> {
+    match s.find(sep) {
+        None => None,
+        Some(index) => {
+            match (T::from_str(&s[..index]), T::from_str(&s[index + 1..])) {
+                (Ok(l), Ok(r)) => Some((l, r)),
+                _ => None
+            }
+        }
+    }
+}
+
+#[test]
+fn test_parse_pair() {
+    assert_eq!(parse_pair::<i32>("", ','), None);
+    assert_eq!(parse_pair::<i32>("10,", ','), None);
+    assert_eq!(parse_pair::<i32>(",20", ','), None);
+    assert_eq!(parse_pair::<i32>("10,20", ','), Some((10, 20)));
+    assert_eq!(parse_pair::<i32>("20,50xy", ','), None);
+    assert_eq!(parse_pair::<f64>("0.5x", 'x'), None);
+    assert_eq!(parse_pair::<f64>("0.5x10", 'x'), Some((0.5, 10.0)));
+}
+
+fn pixel_to_point(
+    bounds: (usize, usize),
+    pixel: (usize, usize),
+    upper_left: Complex<f64>,
+    lower_right: Complex<f64>
+) -> Complex<f64> {
+    let (width, height) = (lower_right.re - upper_left.re, upper_left.im - lower_right.im);
+
+    Complex {
+        re: upper_left.re + pixel.0 as f64 * width / bounds.0 as f64,
+        im: upper_left.im - pixel.1 as f64 * height / bounds.1 as f64
+    }
+}
+
+#[test]
+fn test_pixel_to_point() {
+    assert_eq!(pixel_to_point((100, 200), (25, 175), Complex { re: -1.0, im: 1.0 }, Complex { re: 1.0, im: -1.0 }),
+     Complex { re: -0.5, im: -0.75 })
 }
