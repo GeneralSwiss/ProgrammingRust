@@ -1,17 +1,49 @@
+use actix_web::{web, HttpServer, HttpResponse, App};
+use serde::Deserialize;
 mod gcd;
-use std::env;
-use std::str::FromStr;
 
 fn main() {
-    let mut nums: Vec<u64> = Vec::new();
-    for arg in env::args().skip(1) {
-        nums.push(u64::from_str(&arg).expect("Unable to parse argument into a number."));
+    let server = HttpServer::new(|| {
+        App::new().route("/", web::get().to(get_index))
+        .route("/gcd", web::post().to(post_gcd))
+    });
+
+    println!("Serving on http://localhost:3000");
+    server.bind("127.0.0.1:3000").expect("Problem binding server address")
+    .run().expect("error running server");
+}
+
+fn get_index() -> HttpResponse {
+    HttpResponse::Ok().content_type("text/html")
+    .body(
+        r#"
+        <title>GCD Calculator</title>
+        <form action="/gcd" method="post">
+        <input type="text" name="n"/>
+        <input type="text" name="m"/>
+        <button type="submit">Compute GCD</button>
+        </form>
+        "#,
+    )
+}
+
+fn post_gcd(form: web::Form<GCDRequest>) -> HttpResponse {
+    if form.n == 0 || form.m == 0 {
+        return HttpResponse::BadRequest()
+        .content_type("text/html")
+        .body("Computing GCD with zero is boring!");
     }
 
-    let mut answer = nums[0];
-    for num in &nums[1..] {
-        answer = gcd::gcd(answer, *num);
-    }
+    let response = format!("The greatest common divisor of the numbers {} and {} \
+    is <b>{}</b>\n", form.n, form.m, gcd::gcd(form.n, form.m));
 
-    println!("The GCD between {:?} is {}", nums, answer);
+    HttpResponse::Ok()
+    .content_type("text/html")
+    .body(response)
+}
+
+#[derive(Deserialize)]
+struct GCDRequest {
+    n: u64,
+    m: u64,
 }
